@@ -106,6 +106,7 @@ export async function fakeSwitcher({
     garbage: false,
     mute: new Set(), // request types never answered (acted on all the same)
     noTimer: false, // the device ignores the timer of a switch-on
+    timeOnZero: false, // the device always reads 0 as its time on
     onRequest: undefined, // (type) => void, called as each request is handled (before its answer)
     offCode: breezeOffCode(remote),
     ...knobs,
@@ -167,7 +168,7 @@ export async function fakeSwitcher({
         b.writeUInt16LE(dev.power ? dev.watts : 0, 77);
         b.writeUInt32LE(timeLeft(), 89);
         b.writeUInt32LE(
-          dev.power === 1 && dev.onSince !== undefined
+          !dev.timeOnZero && dev.power === 1 && dev.onSince !== undefined
             ? Math.max(0, Math.round((clock() - dev.onSince) / 1000))
             : 0,
           93,

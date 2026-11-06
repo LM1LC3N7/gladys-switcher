@@ -238,5 +238,77 @@
     "file": "src/app.js",
     "from": "      if (!stop.sent || stop.sends < LIMITS.stopSends) this.kickStop(stop.mac);",
     "to": "      if (!stop.sent) this.kickStop(stop.mac);"
+  },
+  {
+    "name": "stop takes the lane as a read",
+    "file": "src/app.js",
+    "from": "    const acquiring = rt.lane.acquire(PRIORITY.STOP);",
+    "to": "    const acquiring = rt.lane.acquire(PRIORITY.READ);"
+  },
+  {
+    "name": "a read does not send a kept stop first",
+    "file": "src/app.js",
+    "from": "    if (stop && !stop.sent) this.kickStop(mac);",
+    "to": ""
+  },
+  {
+    "name": "a scan does not send a kept stop",
+    "file": "src/app.js",
+    "from": "      if (this.stops.has(d.mac) && !this.stops.get(d.mac).sent) this.kickStop(d.mac);",
+    "to": ""
+  },
+  {
+    "name": "an unanswered stop counts among the 3 sends",
+    "file": "src/app.js",
+    "from": "            stop.answered = false;\n",
+    "to": "            stop.answered = false;\n            stop.sends += 1;\n"
+  },
+  {
+    "name": "time on trusted without proof",
+    "file": "src/app.js",
+    "from": "    if (rt.timeOnValid && timeOn !== undefined && timeOn < elapsed - 90_000) {",
+    "to": "    if (timeOn !== undefined && timeOn < elapsed - 90_000) {"
+  },
+  {
+    "name": "a run read off is kept",
+    "file": "src/app.js",
+    "from": "    if (state.power === 0) {\n      this.runs.delete(mac);",
+    "to": "    if (false) {\n      this.runs.delete(mac);"
+  },
+  {
+    "name": "stop login strict on the CRC",
+    "file": "src/app.js",
+    "from": "lenient: stop || family === 1",
+    "to": "lenient: family === 1"
+  },
+  {
+    "name": "family 1 login strict on the CRC",
+    "file": "src/app.js",
+    "from": "lenient: stop || family === 1",
+    "to": "lenient: stop"
+  },
+  {
+    "name": "family 2 announcement with another CRC accepted",
+    "file": "src/protocol/parse.js",
+    "from": "  if (bad === 'crc' && info.family === 2) return { error: 'crc', modelName: info.name };",
+    "to": ""
+  },
+  {
+    "name": "power beyond the feature published",
+    "file": "src/protocol/parse.js",
+    "from": "watts: watts <= 10000 ? watts : undefined,",
+    "to": "watts,"
+  },
+  {
+    "name": "time left beyond the feature published",
+    "file": "src/protocol/parse.js",
+    "from": "timeLeft: timeLeft <= 86400 ? timeLeft : undefined,",
+    "to": "timeLeft,"
+  },
+  {
+    "name": "attempt time not written before each read",
+    "file": "src/app.js",
+    "from": "    if (!this.attemptSaving) {",
+    "to": "    if (this.attemptAt < 0) {"
   }
 ]

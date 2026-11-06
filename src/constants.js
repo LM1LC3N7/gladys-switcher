@@ -59,7 +59,6 @@ export const TIMINGS = Object.freeze({
   scanEvery: 5 * MINUTE, // background scan (addresses, identities)
   scanSeconds: 6, // capture length of a scan
   identityFor: 15 * MINUTE, // a device seen by a scan is trusted this long
-  attemptSaveEvery: MINUTE, // the read attempt time written to /data at most this often
   heaterGrace: 2 * MINUTE, // a run still on this long after its end is stopped by the module
   storeLoad: 2 * SECOND, // a load of /data waits at most this
   storeSave: 2 * SECOND,

@@ -7,6 +7,20 @@
 // -----------------------------------------------------------------------------
 
 import { frameError } from './frame.js';
+
+/**
+ * A frame sound enough to read: start and announced length always checked;
+ * the CRC strictly, unless `lenient` (family 1, whose signing no unedited
+ * capture proves): then a frame whose only defect is its CRC is read and
+ * flagged by the caller (src/app.js).
+ */
+const readable = (bytes, limits, lenient) => {
+  const bad = frameError(bytes, limits);
+  return bad === undefined || (lenient && bad === 'crc');
+};
+
+/** Whether a sound frame failed its CRC only (to flag it). */
+export const crcOnly = (bytes) => frameError(bytes, { min: 12, max: 1024 }) === 'crc';
 import { MODELS } from './packets.js';
 
 /** Sizes of the announcements of the supported models (and of the token ones, to name them). */
@@ -64,10 +78,13 @@ export function parseDatagram(bytes, sourceIp, options = {}) {
     return { error: 'size' };
   }
   const bad = frameError(bytes, { min: 159, max: 207 });
-  if (bad) return { error: bad };
+  if (bad && bad !== 'crc') return { error: bad };
   const model = hex(bytes, 74, 76);
   const info = MODELS[model];
-  if (!info) return { error: 'model' };
+  if (!info) return { error: bad ?? 'model' };
+  // Family 2 signs as the reference does (unedited captures): strict. Family 1
+  // has no unedited capture: a CRC that differs is read, and said.
+  if (bad === 'crc' && info.family === 2) return { error: 'crc', modelName: info.name };
   const family2 = info.family === 2;
   const ip = family2 ? ipOf(bytes, 77) : ipOf(bytes, 76);
   const mac = family2 ? macOf(bytes, 81) : macOf(bytes, 80);
@@ -83,6 +100,7 @@ export function parseDatagram(bytes, sourceIp, options = {}) {
     key: hex(bytes, 40, 41),
     mac,
     ip,
+    crcMismatch: bad === 'crc',
   };
   if (info.kind === 'breeze') {
     if (bytes.length !== 168) return { error: 'size' };
@@ -96,8 +114,8 @@ export function parseDatagram(bytes, sourceIp, options = {}) {
 }
 
 /** Session id of a login answer (bytes 8..11), or undefined when the frame is not sound. */
-export function parseLogin(bytes) {
-  if (frameError(bytes, { min: 16, max: 1024 })) return undefined;
+export function parseLogin(bytes, { lenient = false } = {}) {
+  if (!readable(bytes, { min: 16, max: 1024 }, lenient)) return undefined;
   return hex(bytes, 8, 12);
 }
 
@@ -108,16 +126,21 @@ const u32 = (bytes, at) => bytes.readUInt32LE(at);
 const onOff = (byte) => (byte === 1 ? 1 : byte === 0 ? 0 : undefined);
 
 /** State of a family 1 device (water heater, plug). */
-export function parseState1(bytes) {
-  if (frameError(bytes, { min: 105, max: 1024 })) return undefined;
+export function parseState1(bytes, { lenient = false } = {}) {
+  if (!readable(bytes, { min: 105, max: 1024 }, lenient)) return undefined;
   const power = onOff(bytes[75]);
   if (power === undefined) return undefined;
+  const watts = u16(bytes, 77);
+  const timeLeft = u32(bytes, 89);
+  const timeOn = u32(bytes, 93);
+  const autoOff = u32(bytes, 97);
+  // Beyond what a feature holds: unknown, never a measure.
   return {
     power,
-    watts: u16(bytes, 77),
-    timeLeft: u32(bytes, 89),
-    timeOn: u32(bytes, 93),
-    autoOff: u32(bytes, 97),
+    watts: watts <= 10000 ? watts : undefined,
+    timeLeft: timeLeft <= 86400 ? timeLeft : undefined,
+    timeOn: timeOn <= 30 * 86400 ? timeOn : undefined,
+    autoOff: autoOff <= 86400 ? autoOff : undefined,
   };
 }
 
@@ -155,4 +178,5 @@ export function parseShutter(bytes) {
 }
 
 /** An answer to a command: a sound frame (the reference reads nothing more from it). */
-export const commandAnswered = (bytes) => frameError(bytes, { min: 12, max: 1024 }) === undefined;
+export const commandAnswered = (bytes, { lenient = false } = {}) =>
+  readable(bytes, { min: 12, max: 1024 }, lenient);

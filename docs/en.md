@@ -38,9 +38,7 @@ in the status and by the "Search the devices" button, never driven.
    - **Allow switching the plugs on**;
    - **Allow moving the shutters** (open, close, position).
 
-Each device added is read every 30 seconds (10 to 600), not more often,
-restarts included (the time of the last read is kept in /data), except after a
-command or a stop: the device is then read again 5 and 20 seconds later. A scan runs every 5 minutes: a
+Each device added is read every 30 seconds (10 to 600), not more often, restarts included (the time of each read is kept in /data before it), except after a command or a stop: the device is then read again 5 and 20 seconds later. A scan runs every 5 minutes: a
 device is driven (stops aside) only while a scan saw it at its address within
 the last 15 minutes, and is no longer read once the scans that work have not
 heard it for 15 minutes (failing scans do not stop it).
@@ -50,7 +48,9 @@ heard it for 15 minutes (failing scans do not stop it).
 Switching off a water heater, a plug or a Breeze, and stopping a shutter
 depend on no option, no read first, nor on the configuration of Gladys (the
 devices known and the stops are kept in /data); they leave even towards a
-device no recent scan saw (to its last known address). A stop goes before the
+device no recent scan saw (to its last known address; when a scan saw that
+address taken by another device, the stop is kept and leaves as soon as a scan
+finds it again). A stop goes before the
 reads and the commands, cancels the commands of the same device still waiting,
 and cuts the session in progress with it.
 
@@ -58,8 +58,11 @@ A stop that cannot leave (device unreachable) is tried again for 3 seconds,
 then kept: tried again 10 and 30 seconds later, then every minute, and before
 every read. Gladys shows it as an error ("the stop is kept and sent as soon as
 it answers") and the status says so. A stop sent is confirmed by a read made
-after it; while such a read shows the device on, it is sent again, 3 sends at
-most. It stays kept (in /data) until a read shows the device off or a switch-on
+after it; while such a read shows the device on, it is sent again, 3 answered
+sends at most. A send the device did not answer does not count: a stop never
+answered is sent again at each read that shows the device on, without end (the
+status says so). A resend may hit a switch-on or a move started meanwhile from
+the app or the remote (it stops it: the safe side). It stays kept (in /data) until a read shows the device off or a switch-on
 from Gladys has left; time alone does not lift it.
 
 A stop is refused in these cases only:
@@ -90,10 +93,20 @@ Switching a water heater or a plug on, and moving a shutter:
 
 Every switch-on of a water heater carries the **timer** of the device (the run
 length configured): it stops by itself at its end. If a read still shows it on
-2 minutes after the end of that run (and nothing switched it on again
-meanwhile), the integration switches it off itself (a stop like the others);
+2 minutes after the end of that run, the integration switches it off itself,
+unless the device proves it was switched on again meanwhile (its time on, once
+checked during a run, is shorter than the run) (a stop like the others);
 that run is kept in /data and followed after a restart. Switching a Breeze on
 is not supported by this version.
+
+## Check sum (CRC)
+
+The frames of the water heaters and the plug were never checked on a real
+device: a frame whose check sum alone differs is read all the same, and the
+device shows "check sum not verified, please report it". For the Runner and the
+Breeze (proven on captures), an announcement whose check sum differs is refused,
+and the status and the "Search the devices" button name it. A stop leaves
+whatever the check sum of the login answer.
 
 ## Security
 

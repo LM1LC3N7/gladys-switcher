@@ -20,7 +20,10 @@ the notes of the version's GitHub Release.
   stop of the shutters, state, room temperature, setpoint and mode of the
   Breeze (switching off only).
 - Stops (water heater, plug and Breeze off, shutter stop) need no option, kept
-  in /data until a read shows them applied, sent again 3 times at most.
+  in /data until a read shows them applied, sent again up to 3 answered times;
+  a stop the device never answers is never given up.
+- Water heater and plug frames whose check sum alone differs are read and
+  flagged; Runner and Breeze announcements refused for it are named.
 - Switching on (water heaters, plugs) and moving the shutters behind options,
   off by default; every switch-on of a water heater carries the device timer
   of the configured run (1 to 150 minutes), and a run still on 2 minutes after

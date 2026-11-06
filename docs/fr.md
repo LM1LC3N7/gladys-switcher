@@ -42,8 +42,8 @@ appareils », jamais pilotés.
    - **Autoriser le déplacement des volets** (ouvrir, fermer, positionner).
 
 Chaque appareil ajouté est lu toutes les 30 secondes (réglable de 10 à 600), pas
-plus souvent, redémarrage compris (l'heure de la dernière lecture est gardée
-dans /data), sauf après une commande ou un arrêt : l'appareil est alors relu 5
+plus souvent, redémarrage compris (l'heure de chaque lecture est gardée dans
+/data avant elle), sauf après une commande ou un arrêt : l'appareil est alors relu 5
 et 20 secondes plus tard.
 Une recherche a lieu toutes les 5 minutes : un appareil n'est commandé (hors
 arrêts) que si une recherche l'a vu à son adresse dans les 15 dernières minutes,
@@ -56,7 +56,8 @@ et n'est plus lu quand les recherches qui marchent ne l'entendent plus depuis
 dépendent d'aucune option, d'aucune lecture préalable, ni de la configuration
 de Gladys (les appareils connus et les arrêts sont gardés dans /data) ; ils
 partent même vers un appareil qu'aucune recherche récente n'a vu (à sa dernière
-adresse connue). Un arrêt passe devant les lectures et les commandes, annule les
+adresse connue ; si une recherche a vu cette adresse prise par un autre
+appareil, l'arrêt est gardé et part dès qu'une recherche le retrouve). Un arrêt passe devant les lectures et les commandes, annule les
 commandes du même appareil qui attendent, et coupe la session en cours avec lui.
 
 Un arrêt qui ne peut pas partir (appareil injoignable) est réessayé pendant
@@ -64,7 +65,11 @@ Un arrêt qui ne peut pas partir (appareil injoignable) est réessayé pendant
 minute, et avant chaque lecture. Gladys l'affiche en erreur (« l'arrêt est
 gardé et envoyé dès qu'il répond ») et le statut le dit. Un arrêt envoyé est
 confirmé par une lecture faite après lui ; tant qu'une telle lecture montre
-l'appareil en marche, il est renvoyé, 3 envois au plus. Il reste gardé (dans
+l'appareil en marche, il est renvoyé, 3 envois reçus au plus. Un envoi auquel
+l'appareil n'a pas répondu ne compte pas : un arrêt jamais répondu est renvoyé à
+chaque lecture qui montre l'appareil en marche, sans fin (le statut le dit). Un
+renvoi peut tomber sur une mise en marche ou un mouvement lancé entre-temps
+depuis l'application ou la télécommande (il l'arrête : c'est le sens sûr). Il reste gardé (dans
 /data) jusqu'à une lecture qui le montre éteint ou une mise en marche depuis
 Gladys qui est partie ; le temps seul ne le lève pas.
 
@@ -98,11 +103,22 @@ Mise en marche d'un chauffe-eau, d'une prise, et déplacement d'un volet :
 
 Chaque mise en marche d'un chauffe-eau porte la **minuterie** de l'appareil
 (la durée de marche configurée) : il s'arrête de lui-même à la fin. Si une
-lecture le montre encore en marche 2 minutes après la fin de cette durée (et
-que rien ne l'a rallumé entre-temps), l'intégration l'éteint elle-même (un
+lecture le montre encore en marche 2 minutes après la fin de cette durée,
+l'intégration l'éteint elle-même, sauf si l'appareil prouve qu'il a été rallumé
+entre-temps (son temps de marche, une fois vérifié juste pendant une marche,
+est plus court que la marche) (un
 arrêt comme les autres) ; cette marche est gardée dans /data et suivie après un
 redémarrage. La mise en marche d'une Breeze n'est pas prise en charge par cette
 version.
+
+## Somme de contrôle (CRC)
+
+Les trames des chauffe-eau et de la prise n'ont jamais été vérifiées sur un vrai
+appareil : une trame dont seule la somme de contrôle diffère est lue quand même,
+et l'appareil porte « CRC non vérifié, à signaler ». Pour les Runner et les
+Breeze (prouvé sur des captures), une annonce dont la somme diffère est refusée,
+et le statut et le bouton « Chercher les appareils » la nomment. Un arrêt part
+quelle que soit la somme de contrôle de la réponse de connexion.
 
 ## Sécurité
 

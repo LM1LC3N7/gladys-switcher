@@ -64,6 +64,21 @@ export const T = {
       `Stop kept, not sent yet (device unreachable): ${list(names)}.`,
       `Arrêt gardé, pas encore envoyé (appareil injoignable) : ${list(names)}.`,
     ),
+  stopsUnanswered: (names) =>
+    both(
+      `Stop sent, the device did not answer (sent again at each read that shows it on, never given up): ${list(names)}.`,
+      `Arrêt envoyé, l'appareil n'a pas répondu (renvoyé à chaque lecture qui le montre en marche, jamais abandonné) : ${list(names)}.`,
+    ),
+  crcRefused: (names) =>
+    both(
+      `Switcher announcements refused for their check sum alone (please report it): ${list(names)}.`,
+      `Annonces Switcher refusées pour leur seule somme de contrôle (CRC différent, à signaler) : ${list(names)}.`,
+    ),
+  crcDiffers: (names) =>
+    both(
+      `Frames read although their check sum differs from the expected one (please report it): ${list(names)}.`,
+      `Trames lues bien que leur somme de contrôle diffère de celle attendue (CRC non vérifié, à signaler) : ${list(names)}.`,
+    ),
   stopsUnconfirmed: (names) =>
     both(
       `Stop sent, not seen applied yet: ${list(names)}.`,
@@ -71,8 +86,8 @@ export const T = {
     ),
   stopsContradicted: (names) =>
     both(
-      `Stop sent 3 times, the device still reads on (kept until it reads off or is switched on from Gladys): ${list(names)}.`,
-      `Arrêt envoyé 3 fois, l'appareil se lit toujours en marche (gardé jusqu'à une lecture éteinte ou une mise en marche depuis Gladys) : ${list(names)}.`,
+      `Stop answered 3 times, the device still reads on (kept until it reads off or is switched on from Gladys): ${list(names)}.`,
+      `Arrêt reçu 3 fois, l'appareil se lit toujours en marche (gardé jusqu'à une lecture éteinte ou une mise en marche depuis Gladys) : ${list(names)}.`,
     ),
   dataUnreadable: both(
     'The /data file cannot be read: it is read again every 10 s, nothing is written there meanwhile.',
@@ -106,10 +121,18 @@ export const BADGE = {
     'Stop kept, not sent yet: it leaves as soon as the device answers.',
     "Arrêt gardé, pas encore envoyé : il part dès que l'appareil répond.",
   ),
+  stopUnanswered: both(
+    'Stop sent, the device did not answer: sent again at each read that shows it on.',
+    "Arrêt envoyé, l'appareil n'a pas répondu : renvoyé à chaque lecture qui le montre en marche.",
+  ),
+  crc: both(
+    'Check sum of the frames not verified (it differs from the expected one): please report it.',
+    'Somme de contrôle des trames non vérifiée (CRC différent de celui attendu) : à signaler.',
+  ),
   stopSent: both('Stop sent, not seen applied yet.', 'Arrêt envoyé, pas encore vu appliqué.'),
   stopContradicted: both(
-    'Stop sent 3 times, the device still reads on.',
-    "Arrêt envoyé 3 fois, l'appareil se lit toujours en marche.",
+    'Stop answered 3 times, the device still reads on.',
+    "Arrêt reçu 3 fois, l'appareil se lit toujours en marche.",
   ),
   commandUnconfirmed: both(
     'Command sent, without confirmation yet.',

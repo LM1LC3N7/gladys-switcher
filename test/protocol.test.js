@@ -136,8 +136,29 @@ test('announcements of the water heaters and plug (edited captures, signed again
     },
   );
   assert.equal(parseDatagram(resign(hex(C.PLUG_DATAGRAM_OFF)), '192.168.1.33').kind, 'plug');
-  // As edited (CRC no longer matching), refused.
-  assert.equal(parseDatagram(hex(C.V4_DATAGRAM_ON), '192.168.1.33').error, 'crc');
+  assert.equal(v4.crcMismatch, false);
+  // As edited (CRC no longer matching): family 1 is read all the same, and flagged.
+  const edited = parseDatagram(hex(C.V4_DATAGRAM_ON), '192.168.1.33');
+  assert.equal(edited.kind, 'heater');
+  assert.equal(edited.crcMismatch, true);
+  // Family 2 (signing proven on unedited captures): refused for the CRC alone.
+  const runner = hex(C.RUNNER_DATAGRAM);
+  runner[runner.length - 4] ^= 1;
+  assert.deepEqual(parseDatagram(runner, '192.168.50.98'), {
+    error: 'crc',
+    modelName: 'Switcher Runner Mini',
+  });
+  // Answers: a family 1 state read despite its CRC only when lenient; a wrong start never.
+  const state = frame(112, (b) => (b[75] = 1));
+  state[state.length - 4] ^= 1;
+  assert.equal(parseState1(state), undefined);
+  assert.equal(parseState1(state, { lenient: true }).power, 1);
+  const login = frame(48, (b) => b.writeUInt32BE(0x01020304, 8));
+  login[login.length - 3] ^= 1;
+  assert.equal(parseLogin(login), undefined);
+  assert.equal(parseLogin(login, { lenient: true }), '01020304');
+  login[0] = 0;
+  assert.equal(parseLogin(login, { lenient: true }), undefined);
 });
 
 test('an announcement is refused when anything is off', () => {
@@ -230,6 +251,13 @@ test('a value outside what the protocol defines is unknown, never 0', () => {
     state1((b) => (b[75] = 2)),
     undefined,
   );
+  // Beyond what a feature holds: unknown.
+  const huge = state1((b) => {
+    b[75] = 1;
+    b.writeUInt16LE(60000, 77);
+    b.writeUInt32LE(100000, 89);
+  });
+  assert.deepEqual([huge.watts, huge.timeLeft], [undefined, undefined]);
   assert.equal(parseState1(frame(60, (b) => (b[75] = 1))), undefined, 'too short');
   const breeze = (fill) => parseBreeze(frame(109, fill));
   assert.equal(

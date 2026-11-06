@@ -80,7 +80,10 @@ to date at the end of every milestone.
   the devices give power only (the reference computes the current from it at
   220 V: not published).
 - **Stops**: see the header of `src/app.js` and the docs (exact list of
-  refusals). Only a write of the stop counts as a try; never given up (shutter
+  refusals). Only an answered write counts among the 3 sends (review r1 B1):
+  a stop the device never answers is sent again at each read started after
+  it that shows the device on, without end, and the status says "sent, no
+  answer". Only a write counts as a try; never given up (shutter
   excepted: momentary, RAM only, 3 minutes, never replayed after a restart);
   confirmed by a read started after the write; one resend per such read, 3
   writes at most; lifted by a read showing off or a switch-on that left; a new
@@ -95,7 +98,7 @@ to date at the end of every milestone.
   Elapsed time on the session clock (wall clock at the start, monotonic
   since; wall clock only after a restart).
 - **Reads**: every interval per device (30 s, 10 to 600), never sooner (the
-  attempt time in /data, at most once a minute, bounded wait); failed reads
+  attempt time in /data before each read, bounded wait); failed reads
   back off 30 s, 1, 2, 5 min, never under the interval; a read cut by a stop
   is not a failure; follow-up reads 5 s and 20 s after a write. A state is
   applied only when its read started after the one shown.
@@ -114,11 +117,19 @@ to date at the end of every milestone.
 
 - Never tested with a real device: everything runs against fake devices built
   from aioswitcher 6.4.0 and the captures of its tests.
-- The CRC of the answers of the family 1 devices (water heaters, plug): the
-  captures of the reference for them are edited (owner hidden), so only the
-  family 2 captures prove that the devices sign their answers like the
-  requests. If a real water heater fails it, every frame is refused: the
-  status shows it unreachable.
+- The CRC of the family 1 devices (water heaters, plug), announcements and
+  answers: every capture of the reference for them is edited (owner hidden),
+  so only the family 2 captures prove the signing. Review r1: family 1 frames
+  whose only defect is the CRC are read and flagged ("CRC non vérifié, à
+  signaler" on the device and in the status); family 2 stays strict, and its
+  announcements refused for the CRC alone are named in the status and by the
+  Test button; a stop takes the session id of its login whatever the CRC.
+- The "time on" field of the water heaters (bytes 93..96, no capture of a
+  heater on): trusted for a device only once a read during a run matched the
+  time elapsed; until then, a run still on after its end is always stopped.
+- DHCP swap of two Switcher (review r1 M5): until the next scan (5 min at
+  most), a switch-on could reach the other device if its 1-byte login key is
+  the same; the device timer bounds the run. Nothing more in v1.
 - The broadcast period of the devices (a 6 s capture assumed enough) and that
   the core relays them on the four ports.
 - A login answer of a real device (the reference fixture is synthetic): the

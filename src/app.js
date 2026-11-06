@@ -16,8 +16,8 @@
 // otherwise it is not read and only stops are sent to it.
 //
 // Reads: one session per device every interval (30 s by default, 10 to 600),
-// never sooner (the time of the attempt is kept in /data, written before the
-// read at most once a minute; a restart waits for the rest of the interval).
+// never sooner (the time of the attempt is kept in /data, written before each
+// read; a restart waits for the rest of the interval).
 // Failed reads wait 30 s, 1, 2, then 5 min, never less than the interval.
 // The reads after a command (5 s, 20 s) are the only sooner ones.
 //
@@ -36,8 +36,9 @@
 //     every read; only a write of the stop counts as a try: a stop never
 //     sent is never given up (a shutter stop excepted, below);
 //   - confirmed by a read started after its write that shows the device off;
-//     until then each such read showing it on sends it again, 3 writes at
-//     most; lifted by that confirmation or by a "switch on" from Gladys that
+//     until then each such read showing it on sends it again, 3 answered
+//     writes at most (a write the device does not answer does not count: a
+//     stop never answered is never given up); lifted by that confirmation or by a "switch on" from Gladys that
 //     left; never by the time. Kept in /data until then;
 //   - a shutter stop is a momentary command: kept in RAM only, tried while
 //     the shutter can still be moving (3 minutes after the click), never
@@ -87,6 +88,7 @@ import {
 } from './protocol/packets.js';
 import {
   commandAnswered,
+  crcOnly,
   parseBreeze,
   parseDatagram,
   parseLogin,
@@ -160,7 +162,6 @@ export class SwitcherApp {
     this.loading = undefined;
     this.loadTimer = undefined;
     this.attemptAt = 0;
-    this.attemptSavedMono = undefined;
     this.dataWritable = true;
     /** mac -> known device { mac, id, key, model, name, ip, remote } */
     this.known = new Map();
@@ -172,6 +173,8 @@ export class SwitcherApp {
     this.rt = new Map();
     /** Names of the models found that need the account token. */
     this.tokenModels = new Map();
+    /** Switcher announcements refused for their CRC alone (last scan): source -> name. */
+    this.crcRefused = new Map();
     this.scanning = undefined;
     this.scanTimer = undefined;
     this.scanState = 'none'; // 'none' | 'ok' | 'failed' | 'unavailable'
@@ -538,15 +541,23 @@ export class SwitcherApp {
       return { heard: [], changed: false };
     }
     const latest = new Map();
+    const crcRefused = new Map();
     for (const entry of Array.isArray(results) ? results.slice(0, LIMITS.datagrams) : []) {
       const b64 = entry?.payload_base64;
       if (typeof b64 !== 'string' || b64.length > 400) continue;
       const device = parseDatagram(Buffer.from(b64, 'base64'), entry.source_ip, {
         allowLoopback: this.allowLoopback,
       });
-      if (device.error) continue;
+      if (device.error) {
+        // A Switcher announcement refused for its CRC alone: named, to be reported.
+        if (device.error === 'crc' && typeof entry.source_ip === 'string') {
+          crcRefused.set(entry.source_ip, `${device.modelName} (${entry.source_ip.slice(0, 15)})`);
+        }
+        continue;
+      }
       latest.set(device.mac, device);
     }
+    this.crcRefused = new Map([...crcRefused].slice(0, 16));
     // One address, two MACs in one scan: neither is trusted there.
     const byIp = new Map();
     for (const d of latest.values()) byIp.set(d.ip, (byIp.get(d.ip) ?? 0) + 1);
@@ -581,6 +592,7 @@ export class SwitcherApp {
         }
       }
       const rt = this.runtime(d.mac);
+      if (d.crcMismatch) rt.crcMismatch = true;
       const fresh = this.identityReadable(d.mac);
       rt.seenAt = started;
       heard.push(d.mac);
@@ -607,9 +619,13 @@ export class SwitcherApp {
     if (this.scanState === 'failed') return message(T.scanFailed);
     const names = heard.map((mac) => nameOf(this.known.get(mac)));
     const tokens = [...this.tokenModels.values()];
-    if (heard.length === 0 && tokens.length === 0) return message(T.test.none);
+    const refused = [...this.crcRefused.values()];
+    if (heard.length === 0 && tokens.length === 0 && refused.length === 0) {
+      return message(T.test.none);
+    }
     let text = T.test.found(heard.length, names);
     if (tokens.length) text = join(text, T.tokenModels(tokens));
+    if (refused.length) text = join(text, T.crcRefused(refused));
     return message(text);
   }
 
@@ -622,7 +638,7 @@ export class SwitcherApp {
   }
 
   /** Opens a session for `holder` (aborted -> rejects 'aborted'), logs in, resolves { session, sessionId }. */
-  async openSession(known, holder, deadline) {
+  async openSession(known, holder, deadline, { stop = false } = {}) {
     const left = deadline - this.monotonic();
     if (left <= 0) throw new SessionError('timeout');
     const session = new Session({ timers: this.timers, monotonic: this.monotonic });
@@ -641,9 +657,24 @@ export class SwitcherApp {
     const answer = await session.exchange(seal(request), {
       timeoutMs: Math.min(TIMINGS.answer, Math.max(1, deadline - this.monotonic())),
     });
-    const sessionId = parseLogin(answer);
+    // A stop takes the session id whatever the CRC (a wrong id is ignored by
+    // the device, and the stop stays kept); family 1 reads a CRC that differs.
+    const sessionId = parseLogin(answer, { lenient: stop || family === 1 });
     if (!sessionId) throw new SessionError('protocol', { sent: true });
+    this.noteCrc(known.mac, answer);
     return { session, sessionId, ts };
+  }
+
+  /** A frame read whose only defect is its CRC: said on the device and in the status. */
+  noteCrc(mac, frame) {
+    if (crcOnly(frame)) {
+      const rt = this.runtime(mac);
+      if (!rt.crcMismatch) {
+        rt.crcMismatch = true;
+        this.updateStatus();
+        this.publishBadges();
+      }
+    }
   }
 
   /**
@@ -698,16 +729,19 @@ export class SwitcherApp {
     }, wait);
   }
 
-  /** Keeps the attempt time in /data before the reads, at most once a minute (bounded wait). */
-  async noteAttempt(mono) {
+  /**
+   * Keeps the attempt time in /data before each periodic read (bounded wait;
+   * reads of several devices due together share one write): a restart never
+   * reads sooner than the interval.
+   */
+  async noteAttempt() {
     this.attemptAt = this.now();
-    if (
-      this.attemptSavedMono === undefined ||
-      mono - this.attemptSavedMono >= TIMINGS.attemptSaveEvery
-    ) {
-      this.attemptSavedMono = mono;
-      await this.saveBounded();
+    if (!this.attemptSaving) {
+      this.attemptSaving = this.saveBounded().finally(() => {
+        this.attemptSaving = undefined;
+      });
     }
+    await this.attemptSaving;
   }
 
   /**
@@ -735,7 +769,7 @@ export class SwitcherApp {
     }
     if (periodic) {
       rt.lastReadStart = mono;
-      await this.noteAttempt(mono);
+      await this.noteAttempt();
     }
     const deadline = this.monotonic() + deadlineMs;
     let release;
@@ -766,8 +800,9 @@ export class SwitcherApp {
           ? parseShutter(answer)
           : kind === 'breeze'
             ? parseBreeze(answer)
-            : parseState1(answer);
+            : parseState1(answer, { lenient: true });
       if (!state) failed = true;
+      else this.noteCrc(mac, answer);
     } catch (err) {
       // A read cut by a stop is not a failure of the device.
       if (!(err instanceof SessionError) || err.kind !== 'aborted' || !holder.aborted) {
@@ -953,7 +988,9 @@ export class SwitcherApp {
     rt.holder = holder;
     let written = false;
     try {
-      const { session, sessionId, ts } = await this.openSession(known, holder, deadline);
+      const { session, sessionId, ts } = await this.openSession(known, holder, deadline, {
+        stop: true,
+      });
       const request = this.stopRequest(known, sessionId, ts);
       // Its answer is waited for within the budget (200 ms at least): the stop is written either way.
       const wait = Math.min(TIMINGS.answer, Math.max(200, deadline - this.monotonic()));
@@ -963,9 +1000,18 @@ export class SwitcherApp {
           beforeSend: () => {
             written = true;
             stop.sent = true;
-            stop.sends += 1;
+            stop.answered = false;
             stop.sentMono = this.monotonic();
           },
+        })
+        .then((answer) => {
+          // Only an answered write counts among its 3 sends: a stop the device
+          // never answers is never given up.
+          if (commandAnswered(answer, { lenient: MODELS[known.model].family === 1 })) {
+            stop.sends += 1;
+            stop.answered = true;
+            this.noteCrc(mac, answer);
+          }
         })
         .catch((err) => {
           if (!written) throw err;
@@ -1033,8 +1079,16 @@ export class SwitcherApp {
       run.startMono !== undefined
         ? this.monotonic() - run.startMono
         : Math.max(0, this.now() - run.startedAt);
-    // On for less time than the run lasted: switched on again elsewhere, not this run.
-    if (Number.isFinite(state.timeOn) && state.timeOn * 1000 < elapsed - 90_000) {
+    // The "time on" field is trusted for this device only once a read during a
+    // run showed it equal to the time elapsed (within 90 s, past 3 minutes):
+    // the run is let go as "switched on again elsewhere" only on that proof;
+    // otherwise the module switches it off at its end (the safe side).
+    const rt = this.runtime(mac);
+    const timeOn = Number.isFinite(state.timeOn) ? state.timeOn * 1000 : undefined;
+    if (timeOn !== undefined && elapsed >= 180_000 && Math.abs(timeOn - elapsed) <= 90_000) {
+      rt.timeOnValid = true;
+    }
+    if (rt.timeOnValid && timeOn !== undefined && timeOn < elapsed - 90_000) {
       this.runs.delete(mac);
       this.saveLater();
       return;
@@ -1217,7 +1271,11 @@ export class SwitcherApp {
           },
         })
         .then((answer) => {
-          if (!commandAnswered(answer)) throw new SessionError('protocol', { sent: true });
+          const lenient = MODELS[known.model].family === 1;
+          if (!commandAnswered(answer, { lenient })) {
+            throw new SessionError('protocol', { sent: true });
+          }
+          this.noteCrc(mac, answer);
         });
     } catch (err) {
       if (at === undefined) {
@@ -1315,17 +1373,23 @@ export class SwitcherApp {
       if (stale.length) parts.push(T.unconfirmed(this.namesOf(stale)));
     }
     const waiting = [];
+    const unanswered = [];
     const sent = [];
     const contradicted = [];
     for (const stop of this.stops.values()) {
       if (!stop.sent) waiting.push(stop.mac);
+      else if (stop.answered === false) unanswered.push(stop.mac);
       else if (stop.sends >= LIMITS.stopSends) contradicted.push(stop.mac);
       else sent.push(stop.mac);
     }
     if (waiting.length) parts.push(T.stopsWaiting(this.namesOf(waiting)));
+    if (unanswered.length) parts.push(T.stopsUnanswered(this.namesOf(unanswered)));
     if (sent.length) parts.push(T.stopsUnconfirmed(this.namesOf(sent)));
     if (contradicted.length) parts.push(T.stopsContradicted(this.namesOf(contradicted)));
     if (this.tokenModels.size) parts.push(T.tokenModels([...this.tokenModels.values()]));
+    if (this.crcRefused.size) parts.push(T.crcRefused([...this.crcRefused.values()]));
+    const crc = [...this.rt].filter(([mac, rt]) => rt.crcMismatch && this.known.has(mac));
+    if (crc.length) parts.push(T.crcDiffers(this.namesOf(crc.map(([mac]) => mac))));
     const text = parts.length ? join(...parts) : both('', '');
     const cut = (s) =>
       s.length > LIMITS.statusLength ? `${s.slice(0, LIMITS.statusLength - 1)}…` : s;
@@ -1356,7 +1420,12 @@ export class SwitcherApp {
         transport: DEVICE_TRANSPORTS?.LOCAL ?? 'local',
         degraded: true,
         message:
-          stop.reason ?? (stop.sends >= LIMITS.stopSends ? BADGE.stopContradicted : BADGE.stopSent),
+          stop.reason ??
+          (stop.answered === false
+            ? BADGE.stopUnanswered
+            : stop.sends >= LIMITS.stopSends
+              ? BADGE.stopContradicted
+              : BADGE.stopSent),
       };
     }
     if (rt?.ok === false) return { transport: 'unreachable', message: BADGE.unreachable };
@@ -1364,6 +1433,7 @@ export class SwitcherApp {
       return { transport: 'local', degraded: true, message: BADGE.unconfirmed };
     }
     if (rt?.badge) return { transport: 'local', degraded: true, message: rt.badge };
+    if (rt?.crcMismatch) return { transport: 'local', degraded: true, message: BADGE.crc };
     return { transport: 'local' };
   }
 

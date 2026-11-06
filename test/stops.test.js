@@ -155,7 +155,7 @@ test('resent only by reads started after its write, 3 writes at most, never lift
   await runFor(ctx.clock, 5 * MINUTE, { step: 200 });
   assert.ok(ctx.dev.count('state') >= reads + 5, 'still read');
   assert.equal(ctx.dev.count('off'), 3, '3 writes at most');
-  assert.match(ctx.gladys.fake.connectionStatus.message.fr, /Arrêt envoyé 3 fois/);
+  assert.match(ctx.gladys.fake.connectionStatus.message.fr, /Arrêt reçu 3 fois/);
   await runFor(ctx.clock, 60 * MINUTE, { step: 5000 });
   assert.equal(store.data.stops.length, 1, 'never lifted by the time');
   // Read off: confirmed and lifted (the reads may be backing off after the jump in time).
@@ -261,4 +261,90 @@ test('at start, a kept stop sent but not confirmed is sent again within its 3 wr
     await runFor(ctx.clock, 3 * SECOND, { step: 20 });
     assert.equal(ctx.dev.count('off'), expected, `sends kept: ${sends}`);
   }
+});
+
+test('a stop the device never answers is never given up; only answered writes count', async (t) => {
+  const store = memoryStore(null);
+  const ctx = await setup(t, { store });
+  await until(ctx.clock, () => ctx.app.rt.get(ctx.dev.mac)?.ok === true, 'first read');
+  ctx.dev.power = 1;
+  // The device takes the stops in but neither answers nor applies them.
+  ctx.dev.mute.add('off');
+  ctx.dev.ignore = true;
+  const r = await click(ctx, ctx.dev, 'power', 0);
+  assert.equal(r.ok, true);
+  await until(ctx.clock, () => ctx.dev.count('off') >= 4, '4 writes', {
+    step: 100,
+    max: 5 * MINUTE,
+  });
+  assert.equal(ctx.app.stops.get(ctx.dev.mac).sends, 0);
+  assert.match(ctx.gladys.fake.connectionStatus.message.fr, /l'appareil n'a pas répondu/);
+  assert.equal(store.data.stops.length, 1);
+  // Back to normal: the next send is applied and confirmed.
+  ctx.dev.mute.clear();
+  ctx.dev.ignore = false;
+  await until(ctx.clock, () => ctx.dev.power === 0, 'applied', { step: 100, max: 5 * MINUTE });
+  await until(ctx.clock, () => store.data.stops.length === 0, 'confirmed', {
+    step: 100,
+    max: 5 * MINUTE,
+  });
+});
+
+test('a stop goes before a read waiting for the lane', async (t) => {
+  const ctx = await setup(t, { config: { read_interval: 600 } });
+  await until(ctx.clock, () => ctx.app.rt.get(ctx.dev.mac)?.ok === true, 'first read');
+  ctx.dev.mute.add('state');
+  // A read in progress (its state never answered), another one waiting behind it.
+  const first = ctx.app.read(ctx.dev.mac);
+  await until(ctx.clock, () => ctx.dev.count('state') >= 2, 'read in progress');
+  const second = ctx.app.read(ctx.dev.mac);
+  await runFor(ctx.clock, 50, { step: 10 });
+  ctx.dev.power = 1;
+  const states = ctx.dev.count('state');
+  const r = await click(ctx, ctx.dev, 'power', 0);
+  assert.equal(r.ok, true, r.error?.message);
+  const types = ctx.dev.requests.map((q) => q.type);
+  const off = types.indexOf('off');
+  assert.ok(off >= 0);
+  assert.equal(
+    types.slice(0, off).filter((x) => x === 'state').length,
+    states,
+    'the read waiting came after the stop',
+  );
+  ctx.dev.mute.clear();
+  await runFor(ctx.clock, 5 * SECOND, { step: 50 });
+  await Promise.allSettled([first, second]);
+  assert.ok(types.length <= ctx.dev.requests.length);
+});
+
+test('a kept stop goes first at the next read, and at the next scan', async (t) => {
+  const ctx = await setup(t, { config: { read_interval: 600 } });
+  await until(ctx.clock, () => ctx.app.rt.get(ctx.dev.mac)?.ok === true, 'first read');
+  ctx.dev.power = 1;
+  ctx.dev.refuse = true;
+  const r = await click(ctx, ctx.dev, 'power', 0);
+  assert.equal(r.ok, false);
+  const rt = ctx.app.rt.get(ctx.dev.mac);
+  // The retry timer out of the way: only the read can send it.
+  ctx.clock.timers.clearTimeout(rt.stopTimer);
+  ctx.dev.refuse = false;
+  const before = ctx.dev.requests.length;
+  await ctx.app.read(ctx.dev.mac).catch(() => {});
+  await runFor(ctx.clock, SECOND, { step: 20 });
+  const types = ctx.dev.requests.slice(before).map((q) => q.type);
+  assert.ok(types.includes('off'), types.join());
+  assert.ok(
+    !types.includes('state') || types.indexOf('off') < types.indexOf('state'),
+    `the stop first: ${types.join()}`,
+  );
+  // Again with a scan.
+  ctx.dev.power = 1;
+  ctx.dev.refuse = true;
+  assert.equal((await click(ctx, ctx.dev, 'power', 0)).ok, false);
+  ctx.clock.timers.clearTimeout(rt.stopTimer);
+  ctx.dev.refuse = false;
+  const offs = ctx.dev.count('off');
+  await ctx.app.scan();
+  await runFor(ctx.clock, SECOND, { step: 20 });
+  assert.equal(ctx.dev.count('off'), offs + 1);
 });

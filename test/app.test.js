@@ -323,3 +323,48 @@ test('a new interval never reads sooner than it after the last read', async (t) 
     max: 5 * SECOND,
   });
 });
+
+test('CRC: family 1 frames that differ are read and flagged; family 2 announcements refused are named', async (t) => {
+  const ctx = await setup(t, {
+    devices: [
+      { model: '0317', garbage: true },
+      { model: '0c01', name: 'Runner hall' },
+    ],
+    heard: (devs) => [devs[0]],
+  });
+  const [heater, runner] = ctx.devs;
+  // The water heater answers with another CRC: read, stopped, flagged.
+  await until(ctx.clock, () => ctx.app.rt.get(heater.mac)?.ok === true, 'heater read');
+  heater.power = 1;
+  const r = await click(ctx, heater, 'power', 0);
+  assert.equal(r.ok, true, r.error?.message);
+  assert.equal(heater.power, 0);
+  assert.equal(ctx.app.stops.get(heater.mac)?.answered ?? true, true);
+  assert.match(ctx.gladys.fake.connectionStatus.message.fr, /CRC non vérifié, à signaler/);
+  // A Runner announcement with another CRC: refused, named in the status and by the button.
+  const a = runner.announcement();
+  const bytes = Buffer.from(a.payload_base64, 'base64');
+  bytes[bytes.length - 4] ^= 1;
+  ctx.gladys.fake.scanResults = {
+    'udp-broadcast': [heater.announcement(), { ...a, payload_base64: bytes.toString('base64') }],
+  };
+  const ack = await ctx.gladys.fake.action('test_connection', {});
+  assert.match(JSON.stringify(ack), /CRC différent, à signaler/);
+  assert.match(JSON.stringify(ack), /Switcher Runner \(127\.0\.0\.\d+\)/);
+  assert.match(ctx.gladys.fake.connectionStatus.message.fr, /Annonces Switcher refusées/);
+});
+
+test('a stop leaves although the login answer of a Runner fails its CRC', async (t) => {
+  const ctx = await setup(t, { devices: [{ model: '0c01', garbage: true }] });
+  const r = await click(ctx, ctx.dev, 'state', 0);
+  assert.equal(ctx.dev.count('stop'), 1, r.error?.message);
+});
+
+test('the attempt time is in /data before every periodic read (a crash never reads sooner)', async (t) => {
+  const store = memoryStore(null);
+  const ctx = await setup(t, { store });
+  await until(ctx.clock, () => ctx.dev.count('state') >= 2, 'two reads', { max: 2 * MINUTE });
+  const second = ctx.dev.requests.filter((q) => q.type === 'state')[1].at;
+  // The device clock is the elapsed virtual time; /data holds wall-clock ms.
+  assert.ok(store.data.attemptAt >= ctx.clock.now() - (ctx.clock.elapsed - second) - 1000);
+});

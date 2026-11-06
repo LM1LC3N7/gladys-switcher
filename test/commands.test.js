@@ -282,3 +282,33 @@ test('commands on 5 devices at once all leave', async (t) => {
   assert.ok(ctx.devs.every((d) => d.count('on') === 1 && d.power === 1));
   void SECOND;
 });
+
+test('a heater whose time on always reads 0 is still switched off at the end of its run', async (t) => {
+  const store = memoryStore(null);
+  const ctx = await setup(t, { store, config: { allow_heater_on: true, heater_minutes: 5 } });
+  ctx.dev.noTimer = true;
+  ctx.dev.timeOnZero = true;
+  assert.equal((await click(ctx, ctx.dev, 'power', 1)).ok, true);
+  await until(ctx.clock, () => ctx.dev.count('off') === 1, 'ended by the module', {
+    step: 1000,
+    max: 10 * MINUTE,
+  });
+});
+
+test('a run read off is over: never stopped later by the module', async (t) => {
+  const store = memoryStore(null);
+  const ctx = await setup(t, { store, config: { allow_heater_on: true, heater_minutes: 5 } });
+  ctx.dev.noTimer = true;
+  ctx.dev.timeOnZero = true;
+  assert.equal((await click(ctx, ctx.dev, 'power', 1)).ok, true);
+  // Switched off from the app, then on again from the app.
+  await runFor(ctx.clock, MINUTE, { step: 500 });
+  ctx.dev.power = 0;
+  await until(ctx.clock, () => store.data.runs.length === 0, 'run over', {
+    step: 500,
+    max: 2 * MINUTE,
+  });
+  ctx.dev.power = 1;
+  await runFor(ctx.clock, 10 * MINUTE, { step: 1000 });
+  assert.equal(ctx.dev.count('off'), 0);
+});
