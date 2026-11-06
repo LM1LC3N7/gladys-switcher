@@ -1,6 +1,6 @@
 {
   "name": "gladys-switcher",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Gladys Assistant external integration for Switcher devices (water heaters, Power Plug, Runner shutters, Breeze air conditioners) over their local protocol. Unofficial, not affiliated with Switcher.",
   "type": "module",

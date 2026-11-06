@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-06
+
 ### Added
 
 - First version: Switcher water heaters (V2, V4, Mini, Touch), Power Plug,
@@ -28,3 +30,6 @@ the notes of the version's GitHub Release.
   off by default; every switch-on of a water heater carries the device timer
   of the configured run (1 to 150 minutes), and a run still on 2 minutes after
   its end is switched off by the integration.
+
+[Unreleased]: https://github.com/LM1LC3N7/gladys-switcher/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-switcher/releases/tag/v0.1.1
