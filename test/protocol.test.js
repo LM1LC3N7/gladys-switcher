@@ -148,6 +148,10 @@ test('announcements of the water heaters and plug (edited captures, signed again
     error: 'crc',
     modelName: 'Switcher Runner Mini',
   });
+  // An unknown model with another CRC: unknown, never named.
+  const unknown = Buffer.from(runner);
+  unknown.writeUInt16BE(0x9999, 74);
+  assert.deepEqual(parseDatagram(unknown, '192.168.50.98'), { error: 'model' });
   // Answers: a family 1 state read despite its CRC only when lenient; a wrong start never.
   const state = frame(112, (b) => (b[75] = 1));
   state[state.length - 4] ^= 1;

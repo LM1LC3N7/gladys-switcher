@@ -81,7 +81,7 @@ export function parseDatagram(bytes, sourceIp, options = {}) {
   if (bad && bad !== 'crc') return { error: bad };
   const model = hex(bytes, 74, 76);
   const info = MODELS[model];
-  if (!info) return { error: bad ?? 'model' };
+  if (!info) return { error: 'model' };
   // Family 2 signs as the reference does (unedited captures): strict. Family 1
   // has no unedited capture: a CRC that differs is read, and said.
   if (bad === 'crc' && info.family === 2) return { error: 'crc', modelName: info.name };

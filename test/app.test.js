@@ -358,6 +358,9 @@ test('a stop leaves although the login answer of a Runner fails its CRC', async 
   const ctx = await setup(t, { devices: [{ model: '0c01', garbage: true }] });
   const r = await click(ctx, ctx.dev, 'state', 0);
   assert.equal(ctx.dev.count('stop'), 1, r.error?.message);
+  // Answered on its session (another CRC): an answer, not "no answer".
+  assert.equal(ctx.app.stops.get(ctx.dev.mac)?.answered, true);
+  assert.doesNotMatch(ctx.gladys.fake.connectionStatus.message.fr, /n'a pas répondu/);
 });
 
 test('the attempt time is in /data before every periodic read (a crash never reads sooner)', async (t) => {

@@ -66,8 +66,7 @@ minute, et avant chaque lecture. Gladys l'affiche en erreur (« l'arrêt est
 gardé et envoyé dès qu'il répond ») et le statut le dit. Un arrêt envoyé est
 confirmé par une lecture faite après lui ; tant qu'une telle lecture montre
 l'appareil en marche, il est renvoyé, 3 envois reçus au plus. Un envoi auquel
-l'appareil n'a pas répondu ne compte pas : un arrêt jamais répondu est renvoyé à
-chaque lecture qui montre l'appareil en marche, sans fin (le statut le dit). Un
+l'appareil n'a pas répondu ne compte pas : un arrêt jamais répondu est renvoyé à chaque lecture qui montre l'appareil en marche, sans fin (le statut le dit) : relu 5 et 20 secondes après le premier envoi d'un clic, puis aux lectures périodiques seulement. Une réponse reçue sur la session compte, même si sa somme de contrôle diffère. Un
 renvoi peut tomber sur une mise en marche ou un mouvement lancé entre-temps
 depuis l'application ou la télécommande (il l'arrête : c'est le sens sûr). Il reste gardé (dans
 /data) jusqu'à une lecture qui le montre éteint ou une mise en marche depuis
@@ -117,8 +116,7 @@ Les trames des chauffe-eau et de la prise n'ont jamais été vérifiées sur un 
 appareil : une trame dont seule la somme de contrôle diffère est lue quand même,
 et l'appareil porte « CRC non vérifié, à signaler ». Pour les Runner et les
 Breeze (prouvé sur des captures), une annonce dont la somme diffère est refusée,
-et le statut et le bouton « Chercher les appareils » la nomment. Un arrêt part
-quelle que soit la somme de contrôle de la réponse de connexion.
+et le statut et le bouton « Chercher les appareils » la nomment. Un arrêt part quelle que soit la somme de contrôle de la réponse de connexion. Dès qu'une trame d'un chauffe-eau ou d'une prise a passé la somme de contrôle, ses trames suivantes qui ne la passent pas sont refusées (elles ne peuvent ni lever un arrêt ni finir une marche).
 
 ## Sécurité
 

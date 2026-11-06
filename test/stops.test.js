@@ -348,3 +348,38 @@ test('a kept stop goes first at the next read, and at the next scan', async (t) 
   await runFor(ctx.clock, SECOND, { step: 20 });
   assert.equal(ctx.dev.count('off'), offs + 1);
 });
+
+test('a stop never answered: resent at the periodic reads only, /data written only when it changes', async (t) => {
+  const store = memoryStore(null);
+  const ctx = await setup(t, { store });
+  await until(ctx.clock, () => ctx.app.rt.get(ctx.dev.mac)?.ok === true, 'first read');
+  ctx.dev.power = 1;
+  ctx.dev.mute.add('off');
+  ctx.dev.ignore = true;
+  const reads = ctx.dev.count('state');
+  const saves = store.saves;
+  assert.equal((await click(ctx, ctx.dev, 'power', 0)).ok, true);
+  await runFor(ctx.clock, 5 * MINUTE, { step: 100 });
+  const readCount = ctx.dev.count('state') - reads;
+  // Every 30 s, plus the reads 5 s and 20 s after the click.
+  assert.ok(readCount <= 10 + 2 + 1, `${readCount} reads in 5 min`);
+  assert.ok(ctx.dev.count('off') <= readCount + 1, `${ctx.dev.count('off')} stop writes`);
+  assert.ok(ctx.dev.count('off') >= 5, 'still resent');
+  // The attempt time before each periodic read, and the stop when it changed.
+  assert.ok(store.saves - saves <= readCount + 3, `${store.saves - saves} writes of /data`);
+});
+
+test('once a heater passed its CRC, a frame with another CRC never lifts its stop', async (t) => {
+  const store = memoryStore(null);
+  const ctx = await setup(t, { store });
+  await until(ctx.clock, () => ctx.app.rt.get(ctx.dev.mac)?.ok === true, 'first read');
+  ctx.dev.power = 1;
+  ctx.dev.ignore = true;
+  await click(ctx, ctx.dev, 'power', 0);
+  // The device now reads "off", but with another CRC.
+  ctx.dev.garbage = true;
+  ctx.dev.power = 0;
+  await runFor(ctx.clock, 2 * MINUTE, { step: 100 });
+  assert.equal(store.data.stops.length, 1, 'kept');
+  assert.equal(ctx.app.rt.get(ctx.dev.mac).ok, false);
+});

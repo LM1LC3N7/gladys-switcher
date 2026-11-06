@@ -59,9 +59,7 @@ then kept: tried again 10 and 30 seconds later, then every minute, and before
 every read. Gladys shows it as an error ("the stop is kept and sent as soon as
 it answers") and the status says so. A stop sent is confirmed by a read made
 after it; while such a read shows the device on, it is sent again, 3 answered
-sends at most. A send the device did not answer does not count: a stop never
-answered is sent again at each read that shows the device on, without end (the
-status says so). A resend may hit a switch-on or a move started meanwhile from
+sends at most. A send the device did not answer does not count: a stop never answered is sent again at each read that shows the device on, without end (the status says so): read 5 and 20 seconds after the first send of a click, then at the periodic reads only. An answer received on the session counts, even when its check sum differs. A resend may hit a switch-on or a move started meanwhile from
 the app or the remote (it stops it: the safe side). It stays kept (in /data) until a read shows the device off or a switch-on
 from Gladys has left; time alone does not lift it.
 
@@ -105,8 +103,7 @@ The frames of the water heaters and the plug were never checked on a real
 device: a frame whose check sum alone differs is read all the same, and the
 device shows "check sum not verified, please report it". For the Runner and the
 Breeze (proven on captures), an announcement whose check sum differs is refused,
-and the status and the "Search the devices" button name it. A stop leaves
-whatever the check sum of the login answer.
+and the status and the "Search the devices" button name it. A stop leaves whatever the check sum of the login answer. Once a frame of a water heater or a plug passed the check sum, its later frames that fail it are refused (they can neither lift a stop nor end a run).
 
 ## Security
 

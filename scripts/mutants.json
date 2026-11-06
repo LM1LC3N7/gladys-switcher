@@ -104,7 +104,7 @@
   {
     "name": "run restarted elsewhere still stopped",
     "file": "src/app.js",
-    "from": "    if (Number.isFinite(state.timeOn) && state.timeOn * 1000 < elapsed - 90_000) {",
+    "from": "    if (rt.timeOnValid && timeOn !== undefined && timeOn < elapsed - 90_000) {",
     "to": "    if (false) {"
   },
   {
@@ -278,14 +278,14 @@
   {
     "name": "stop login strict on the CRC",
     "file": "src/app.js",
-    "from": "lenient: stop || family === 1",
-    "to": "lenient: family === 1"
+    "from": "lenient: stop || this.lenientFor(known),",
+    "to": "lenient: this.lenientFor(known),"
   },
   {
     "name": "family 1 login strict on the CRC",
     "file": "src/app.js",
-    "from": "lenient: stop || family === 1",
-    "to": "lenient: stop"
+    "from": "lenient: stop || this.lenientFor(known),",
+    "to": "lenient: stop,"
   },
   {
     "name": "family 2 announcement with another CRC accepted",
@@ -310,5 +310,35 @@
     "file": "src/app.js",
     "from": "    if (!this.attemptSaving) {",
     "to": "    if (this.attemptAt < 0) {"
+  },
+  {
+    "name": "follow-up reads after every stop write",
+    "file": "src/app.js",
+    "from": "          if (!stop.followed) {",
+    "to": "          if (true) {"
+  },
+  {
+    "name": "/data written at every stop write",
+    "file": "src/app.js",
+    "from": "    else if (stop.kind === 'off' && `${stop.sent}:${stop.sends}` !== kept) this.saveLater();",
+    "to": "    else if (stop.kind === 'off') this.saveLater();"
+  },
+  {
+    "name": "a device that passed the CRC still read leniently",
+    "file": "src/app.js",
+    "from": "    return MODELS[known.model].family === 1 && !this.rt.get(known.mac)?.crcProven;",
+    "to": "    return MODELS[known.model].family === 1;"
+  },
+  {
+    "name": "a family 2 stop answer with another CRC is not an answer",
+    "file": "src/app.js",
+    "from": "          if (commandAnswered(answer, { lenient: true })) {",
+    "to": "          if (commandAnswered(answer, { lenient: MODELS[known.model].family === 1 })) {"
+  },
+  {
+    "name": "unknown model with another CRC named",
+    "file": "src/protocol/parse.js",
+    "from": "  if (!info) return { error: 'model' };",
+    "to": "  if (!info) return { error: bad ?? 'model' };"
   }
 ]

@@ -70,7 +70,7 @@ import {
   serializeMemory,
 } from './store.js';
 import { breezeOffCode } from './breeze/remotes.js';
-import { seal } from './protocol/frame.js';
+import { frameError, seal } from './protocol/frame.js';
 import {
   MODELS,
   SUPPORTED_KINDS,
@@ -550,7 +550,7 @@ export class SwitcherApp {
       });
       if (device.error) {
         // A Switcher announcement refused for its CRC alone: named, to be reported.
-        if (device.error === 'crc' && typeof entry.source_ip === 'string') {
+        if (device.error === 'crc' && device.modelName && typeof entry.source_ip === 'string') {
           crcRefused.set(entry.source_ip, `${device.modelName} (${entry.source_ip.slice(0, 15)})`);
         }
         continue;
@@ -659,16 +659,25 @@ export class SwitcherApp {
     });
     // A stop takes the session id whatever the CRC (a wrong id is ignored by
     // the device, and the stop stays kept); family 1 reads a CRC that differs.
-    const sessionId = parseLogin(answer, { lenient: stop || family === 1 });
+    const sessionId = parseLogin(answer, {
+      lenient: stop || this.lenientFor(known),
+    });
     if (!sessionId) throw new SessionError('protocol', { sent: true });
     this.noteCrc(known.mac, answer);
     return { session, sessionId, ts };
   }
 
+  /** Family 1 frames are read despite a CRC that differs, until one of the device passes it. */
+  lenientFor(known) {
+    return MODELS[known.model].family === 1 && !this.rt.get(known.mac)?.crcProven;
+  }
+
   /** A frame read whose only defect is its CRC: said on the device and in the status. */
   noteCrc(mac, frame) {
+    const rt = this.runtime(mac);
+    // Once a frame of the device passed its CRC, it is never read leniently again.
+    if (frameError(frame, { min: 12, max: LIMITS.frame }) === undefined) rt.crcProven = true;
     if (crcOnly(frame)) {
-      const rt = this.runtime(mac);
       if (!rt.crcMismatch) {
         rt.crcMismatch = true;
         this.updateStatus();
@@ -800,7 +809,7 @@ export class SwitcherApp {
           ? parseShutter(answer)
           : kind === 'breeze'
             ? parseBreeze(answer)
-            : parseState1(answer, { lenient: true });
+            : parseState1(answer, { lenient: this.lenientFor(known) });
       if (!state) failed = true;
       else this.noteCrc(mac, answer);
     } catch (err) {
@@ -969,7 +978,12 @@ export class SwitcherApp {
         if (outcome === 'written') {
           rt.stopTries = 0;
           this.timers.clearTimeout(rt.stopTimer);
-          this.followUp(mac);
+          // Reads 5 s and 20 s after the first write of a click only; the
+          // resends then follow the periodic reads (never a loop of follow-ups).
+          if (!stop.followed) {
+            stop.followed = true;
+            this.followUp(mac);
+          }
           return 'written';
         }
       }
@@ -987,6 +1001,8 @@ export class SwitcherApp {
     const holder = this.newHolder('stop');
     rt.holder = holder;
     let written = false;
+    // What /data keeps of this stop, to write it only when that changes.
+    const kept = `${stop.sent}:${stop.sends}`;
     try {
       const { session, sessionId, ts } = await this.openSession(known, holder, deadline, {
         stop: true,
@@ -1006,8 +1022,9 @@ export class SwitcherApp {
         })
         .then((answer) => {
           // Only an answered write counts among its 3 sends: a stop the device
-          // never answers is never given up.
-          if (commandAnswered(answer, { lenient: MODELS[known.model].family === 1 })) {
+          // never answers is never given up. An answer on the session (start
+          // and length sound) counts whatever its CRC: the device did answer.
+          if (commandAnswered(answer, { lenient: true })) {
             stop.sends += 1;
             stop.answered = true;
             this.noteCrc(mac, answer);
@@ -1024,7 +1041,7 @@ export class SwitcherApp {
     // time); a stop written does not wait for that.
     const closing = this.endSession(holder).finally(release);
     if (!written) await closing;
-    else if (stop.kind === 'off') this.saveLater();
+    else if (stop.kind === 'off' && `${stop.sent}:${stop.sends}` !== kept) this.saveLater();
     return written ? 'written' : 'notSent';
   }
 
@@ -1271,7 +1288,7 @@ export class SwitcherApp {
           },
         })
         .then((answer) => {
-          const lenient = MODELS[known.model].family === 1;
+          const lenient = this.lenientFor(known);
           if (!commandAnswered(answer, { lenient })) {
             throw new SessionError('protocol', { sent: true });
           }
