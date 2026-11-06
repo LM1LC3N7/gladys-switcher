@@ -1,45 +1,45 @@
 // -----------------------------------------------------------------------------
-// Integration configuration.
-//
-// The configuration is filled in by the user in Gladys, from the `config_schema`
-// declared in `gladys-assistant-integration.json`. The SDK fetches it for you
-// (`gladys.getConfig()`) and notifies you of every change through
-// `gladys.onConfigUpdated()`.
-//
-// This module only provides defaults and normalizes the received object, so the
-// rest of the code never has to deal with `undefined`.
+// The configuration: DEFAULT_CONFIG mirrors the defaults of the manifest
+// (test/manifest.test.js ties them). Every value is checked here: a value out
+// of its range takes the default, never a value outside the bounds.
 // -----------------------------------------------------------------------------
 
-// Defaults: they MUST stay consistent with the `default` values declared in the
-// `config_schema` of the manifest.
-export const DEFAULT_CONFIG = {
-  latitude: 48.8566, // Paris
-  longitude: 2.3522,
-  unit: 'celsius', // 'celsius' | 'fahrenheit'
-  // Seconds between two reads of the polled sensors. Gladys polls at most once
-  // a minute: slower intervals are applied by skipping polls (see
-  // createPoller in src/devices/index.js).
-  poll_frequency: 300,
-  // Reserved key (NOT in config_schema): because the manifest declares both
-  // 'local' and 'cloud' in its `transports` field, Gladys shows a standard
-  // "Prefer the local connection" toggle and sends the user's choice here.
-  // Read-only for the integration; defaults to true.
-  GLADYS_PREFER_LOCAL: true,
-};
+import { HEATER_MINUTES, READ_INTERVAL } from './constants.js';
 
-/**
- * Merge the user config with the defaults.
- * @param {Record<string, unknown>} raw config returned by the SDK
- */
-export function normalizeConfig(raw = {}) {
+export const DEFAULT_CONFIG = Object.freeze({
+  read_interval: READ_INTERVAL.default,
+  allow_heater_on: false,
+  heater_minutes: HEATER_MINUTES.default,
+  allow_plug_on: false,
+  allow_shutter_moves: false,
+});
+
+/** A whole number within [min, max] (a numeric text accepted), else undefined. */
+export function integerIn(value, min, max) {
+  if (typeof value === 'string') {
+    if (!/^\s*-?\d+\s*$/.test(value)) return undefined;
+    value = Number(value);
+  }
+  return Number.isInteger(value) && value >= min && value <= max ? value : undefined;
+}
+
+/** true only for true or "true": anything else (missing, unreadable) keeps the command off. */
+const flag = (value) => value === true || value === 'true';
+
+/** The values the app uses: { readInterval (ms), allowHeaterOn, heaterMinutes, allowPlugOn, allowShutterMoves }. */
+export function normalizeConfig(raw) {
+  const config = raw && typeof raw === 'object' ? raw : {};
+  const get = (key) => (Object.hasOwn(config, key) ? config[key] : undefined);
+  const seconds =
+    integerIn(get('read_interval'), READ_INTERVAL.min, READ_INTERVAL.max) ??
+    DEFAULT_CONFIG.read_interval;
   return {
-    ...DEFAULT_CONFIG,
-    ...raw,
-    // Force the types: config may arrive as strings from a form.
-    latitude: Number(raw.latitude ?? DEFAULT_CONFIG.latitude),
-    longitude: Number(raw.longitude ?? DEFAULT_CONFIG.longitude),
-    poll_frequency: Number(raw.poll_frequency ?? DEFAULT_CONFIG.poll_frequency),
-    // The preference is a boolean; anything but an explicit false means true.
-    GLADYS_PREFER_LOCAL: raw.GLADYS_PREFER_LOCAL !== false,
+    readInterval: seconds * 1000,
+    allowHeaterOn: flag(get('allow_heater_on')),
+    heaterMinutes:
+      integerIn(get('heater_minutes'), HEATER_MINUTES.min, HEATER_MINUTES.max) ??
+      DEFAULT_CONFIG.heater_minutes,
+    allowPlugOn: flag(get('allow_plug_on')),
+    allowShutterMoves: flag(get('allow_shutter_moves')),
   };
 }

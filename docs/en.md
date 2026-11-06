@@ -1,61 +1,111 @@
-# Demo Devices Template
+# Switcher
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+Unofficial Gladys integration for the **Switcher** devices of your local
+network: water heaters (V2, V4, Mini, Touch), **Power Plug**, **Runner** and
+**Runner Mini** shutters, **Breeze** air conditioners. The integration speaks
+the local protocol of the devices, without any cloud: they announce themselves
+in UDP broadcast (captured by Gladys), then are read and driven over TCP
+(ports 9957 and 10000).
+
+Never tested with a real device: the integration follows the protocol as the
+aioswitcher library (used by Home Assistant) reads and writes it, and the
+frames its tests recorded. Not affiliated with Switcher.
 
 ## What you get
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+- **Water heaters**: on/off, power drawn (W), time left of the current run.
+- **Power Plug**: on/off, power drawn (W).
+- **Runner, Runner Mini**: position (0 closed, 100 open), open, close, stop.
+- **Breeze**: state (on/off), room temperature, setpoint and mode (read only),
+  switching off.
 
-## Configuration
+Not supported: the models that need the **token of the Switcher account**
+(Runner S11, Runner S12, Lights SL01/SL02/SL03, Heater). The token is asked for
+on the vendor's website, but using it means decoding it with a key taken from
+the Switcher app, which amounts to imitating the app. These devices are named
+in the status and by the "Search the devices" button, never driven.
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+## Setup
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+1. Give each device a fixed IP address in your router (advised; an address
+   that changes is followed by the scans).
+2. Install the integration, then open the **Discovery** tab and scan: Gladys
+   listens to the announcements of the devices for a few seconds.
+3. Add the devices found.
+4. If you wish, tick the commands allowed (all off by default):
+   - **Allow switching the water heaters on**, with the **run length** (1 to
+     150 minutes, 60 by default);
+   - **Allow switching the plugs on**;
+   - **Allow moving the shutters** (open, close, position).
 
-## Actions
+Each device added is read every 30 seconds (10 to 600), not more often,
+restarts included (the time of the last read is kept in /data), except after a
+command or a stop: the device is then read again 5 and 20 seconds later. A scan runs every 5 minutes: a
+device is driven (stops aside) only while a scan saw it at its address within
+the last 15 minutes, and is no longer read once the scans that work have not
+heard it for 15 minutes (failing scans do not stop it).
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+## Stops
 
-## Scenes
+Switching off a water heater, a plug or a Breeze, and stopping a shutter
+depend on no option, no read first, nor on the configuration of Gladys (the
+devices known and the stops are kept in /data); they leave even towards a
+device no recent scan saw (to its last known address). A stop goes before the
+reads and the commands, cancels the commands of the same device still waiting,
+and cuts the session in progress with it.
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+A stop that cannot leave (device unreachable) is tried again for 3 seconds,
+then kept: tried again 10 and 30 seconds later, then every minute, and before
+every read. Gladys shows it as an error ("the stop is kept and sent as soon as
+it answers") and the status says so. A stop sent is confirmed by a read made
+after it; while such a read shows the device on, it is sent again, 3 sends at
+most. It stays kept (in /data) until a read shows the device off or a switch-on
+from Gladys has left; time alone does not lift it.
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+A stop is refused in these cases only:
 
-## Dashboard
+- a Breeze whose remote has no plain "off" code (a toggle remote, where the
+  same code switches on and off, or an unknown remote): its state is shown
+  read only;
+- a device the integration does not know (neither from a scan nor from the
+  params of the device created in Gladys).
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+A shutter stop is a momentary command: kept in memory only, it is tried again
+for 3 minutes (the travel time of a shutter), then dropped, and it is never
+replayed after a restart (it would stop a movement started since).
+
+## Other commands
+
+Switching a water heater or a plug on, and moving a shutter:
+
+- refused when the option is not ticked, when the configuration is not read
+  yet, when the address of the device is not confirmed by a recent scan, when
+  /data cannot be written, or while a stop of the same device is being sent;
+- the option, the deadline and the cancellation are checked again right before
+  the write; a command that did not leave within 3 seconds is refused
+  ("nothing was sent");
+- a command that left is confirmed only by a read made after it showing the
+  value asked; otherwise the device shows "Command sent, without confirmation
+  yet" until a read shows it.
+
+Every switch-on of a water heater carries the **timer** of the device (the run
+length configured): it stops by itself at its end. If a read still shows it on
+2 minutes after the end of that run (and nothing switched it on again
+meanwhile), the integration switches it off itself (a stop like the others);
+that run is kept in /data and followed after a restart. Switching a Breeze on
+is not supported by this version.
+
+## Security
+
+The local protocol of Switcher has no password: any device of your network can
+drive your Switcher devices. Keep them on a trusted network. The integration
+keeps no secret.
 
 ## Troubleshooting
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+- "No Switcher device found": the devices must be on the same local network as
+  Gladys (UDP broadcast does not cross routers).
+- "The network scan of Gladys is not available": a Gladys version that offers
+  network discovery to the integrations is needed (5.1 or later).
+- A device "unreachable": check its address and that no firewall blocks TCP
+  ports 9957 (water heaters, plug) and 10000 (Runner, Breeze).

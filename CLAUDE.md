@@ -5,72 +5,77 @@ contributors.
 
 ## What this is
 
-A Gladys Assistant **external integration**: a Node.js service (Node 22+, ESM,
-no build step) that runs in its own sandboxed Docker container and talks to
-Gladys through
+A Gladys Assistant **external integration** for Switcher devices (water
+heaters, Power Plug, Runner shutters, Breeze air conditioners) over their local
+protocol: a Node.js service (Node 22+, ESM, no build step) that runs in its own
+sandboxed Docker container and talks to Gladys through
 [`@gladysassistant/integration-sdk`](https://github.com/GladysAssistant/integration-sdk-js),
-its only runtime dependency. It started from the official JavaScript template.
+its only runtime dependency. See `TODO.md` for the status and the decisions.
 
 ## Commands
 
 ```bash
 npm install
 npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
-node --test --test-name-pattern "plug"    # tests whose name matches
-npm run lint                              # ESLint
-npm run format:check                      # Prettier, as the CI runs it
-npm run format                            # Prettier, fix in place
-npx github:GladysAssistant/integration-store .   # store admission checks
+node --test test/stops.test.js            # one file
+npm run cover                             # regenerate cover.png (800×534)
+npm run lint
+npm run format:check
+node scripts/mutants.mjs                  # mutation check of the guards, one at a time
+npx github:GladysAssistant/integration-store .
 ```
-
-The CI (`.github/workflows/ci.yml`) runs `format:check`, `lint` and `test` on
-Node 22 and 24, and builds the Docker image: run the three commands before
-pushing.
 
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
+index.js                          SDK wiring only: src/handlers.js registered before connect()
+src/handlers.js                   the SDK handlers -> SwitcherApp (shared with the tests)
+src/app.js                        SwitcherApp: scans, reads, stops, commands, runs, status
+src/protocol/frame.js             frame length and CRC (seal, check)
+src/protocol/packets.js           models and requests (bounded values)
+src/protocol/parse.js             announcements and answers (fixed offsets, unknown != 0)
+src/protocol/session.js           one TCP session: framing, bounded waits, abort
+src/breeze/                       the infrared "off" codes of the Breeze remotes
+src/devices.js                    known devices -> Gladys devices, identifier rule (pure)
+src/lane.js                       one session at a time per device: stops, commands, reads
+src/publisher.js                  states within 300/min
+src/store.js                      /data/switcher-state.json: devices, stops, runs, attempt
 src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
-.github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
+src/constants.js, src/i18n.js     frozen keys, limits, timings; texts in English and French
+scripts/cover.mjs                 cover.png generator (plain Node)
+scripts/mutants.mjs, .json        mutation check of the guards (not in the image, not in CI)
+test/                             node --test, against the SDK's fake Gladys and fake devices
+                                  on real loopback sockets (test/helpers/fakeSwitcher.js)
 ```
+
+## Safety rules of this integration
+
+- Stops (water heater, plug and Breeze off, shutter stop) are never behind an
+  option, the identity, a read, the configuration, /data or a pause; they cut
+  the session in progress and cancel the commands waiting. Never put them
+  behind anything.
+- A water heater is switched on only with the device timer (`heaterOn()`, 1 to
+  150 minutes): never add a path that switches it on without one.
+- Every other command is behind its option (off by default), checked on
+  arrival and in `beforeSend`, and needs an identity confirmed by a recent
+  scan and a writable /data.
+- Never a `switch` for a water heater or an air conditioner.
+- Models that need the account token are never driven (app imitation).
 
 ## Rules
 
-- **External ids are forever.** Build them with
-  `gladys.externalIds(type, platformId)`, `platformId` being the unique id the
-  platform gives the device (serial, cloud id, MAC), never a label. Gladys keys
-  devices, their history, scenes and dashboards on them: changing one creates a
-  new device and orphans the old one. The same goes for every key users store:
-  manifest `config_schema`, `actions`, widget and scene keys, feature keys.
-- **The container rootfs is read-only.** Write only under `/data`, the one
-  writable volume. Never log tokens, passwords or API keys.
-- **Versions belong to the Release workflow** (Actions → Release). Never edit
-  `version` in `package.json` or in the manifest, nor the `docker_image` tag,
-  by hand — except on the README's hand-pushed tag path, which bumps all three
-  together before tagging. `test/manifest.test.js` checks they agree.
-- **Changelog.** Every user-visible change adds a line under `## [Unreleased]`
-  in `CHANGELOG.md` (`### Added`, `Changed`, `Fixed`, `Removed`, `Security`).
-  Never write a version heading: the Release workflow moves the section, and it
-  becomes the notes of the GitHub Release.
-- **Manifest.** Texts are multi-language objects `{ "en": ..., "fr": ... }`:
-  `label`, `description` and `placeholder` alike, never a plain string. The
-  catalog `description` holds 10 to 100 characters per language. A field the
-  older cores do not know needs a higher `gladys_version` minimum
-  (`categories`: 4.86.0; `widgets`, `scene_triggers`, `scene_actions`,
-  `type: "provider"`: 5.1.0). `test/manifest.test.js` ties the manifest to the
-  code (defaults, action, scene and widget handlers): change both sides
-  together.
-- **User-facing text** is bilingual (English and French): action messages,
-  manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
+- **External ids are forever** (`ext:<selector>:switcher:<mac>`): changing the
+  rule orphans every device, its history and its scenes.
+- **The container rootfs is read-only.** Write only under `/data`, never
+  waiting on it without a bound.
+- **Two clocks.** `now` (wall) only dates what `/data` keeps and the clock
+  field of the requests; every pace, deadline and guard runs on `monotonic`.
+- **Versions belong to the Release workflow**; `test/manifest.test.js` checks
+  the four places agree.
+- **Changelog.** Every user-visible change adds a line under `## [Unreleased]`.
+- **User-facing text** is bilingual (English and French), docs kept in sync
+  with the code (the list of the refusals of a stop is exact).
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
-  in English. Tests never touch the network.
+  in English. Tests never touch the network beyond 127.0.0.x, and every wait in
+  them is bounded.
+- **Encoding.** UTF-8 without BOM; `test/encoding.test.js` refuses mojibake.

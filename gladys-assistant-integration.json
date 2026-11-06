@@ -1,177 +1,130 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Switcher",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Switcher water heaters, plugs, Runner shutters and Breeze air conditioners, locally.",
+    "fr": "Chauffe-eau, prises, volets Runner et climatisations Breeze Switcher, en local."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-switcher:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-switcher/main/cover.png",
+  "categories": ["climate", "lighting", "energy"],
+  "transports": ["local"],
+  "network_discovery": [{ "type": "udp-broadcast", "ports": [20002, 10002, 20003, 10003] }],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your Switcher devices",
+        "fr": "Vos appareils Switcher"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Shows in Gladys the Switcher devices of your local network, without any cloud: water heaters (V2, V4, Mini, Touch: on/off, power, time left), Power Plug (on/off, power), Runner and Runner Mini shutters (position, stop) and Breeze air conditioners (on/off state, room temperature, setpoint, mode). The devices announce themselves on the network: open the Discovery tab and scan, then add them. Stopping (switching off, stopping a shutter) needs no option; switching on and moving are sent only if you allow them below. Models that need the token of the Switcher account (Runner S11/S12, Lights, Heater) are not supported. The protocol has no password: keep the devices on a trusted network. Never tested with a real device. Not affiliated with Switcher.",
+        "fr": "Affiche dans Gladys les appareils Switcher de votre réseau local, sans cloud : chauffe-eau (V2, V4, Mini, Touch : marche/arrêt, puissance, temps restant), Power Plug (marche/arrêt, puissance), volets Runner et Runner Mini (position, arrêt) et climatisations Breeze (état, température de la pièce, consigne, mode). Les appareils s'annoncent sur le réseau : ouvrez l'onglet Découverte et lancez une recherche, puis ajoutez-les. L'arrêt (éteindre, arrêter un volet) ne dépend d'aucune option ; la mise en marche et les déplacements ne partent que si vous les autorisez ci-dessous. Les modèles qui exigent le jeton du compte Switcher (Runner S11/S12, Lights, Heater) ne sont pas pris en charge. Le protocole n'a pas de mot de passe : gardez les appareils sur un réseau de confiance. Jamais testé avec un vrai appareil. Sans lien avec Switcher."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/LM1LC3N7/gladys-switcher/blob/main/docs/fr.md",
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-switcher/blob/main/docs/en.md",
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
+      "key": "read_interval",
       "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "label": {
+        "en": "Read interval (s)",
+        "fr": "Intervalle de lecture (s)"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
-    },
-    {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
       "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
-      "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
-      "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
-      "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "How often each device is read, in seconds (10 to 600).",
+        "fr": "Fréquence de lecture de chaque appareil, en secondes (10 à 600)."
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": 30,
+      "min": 10,
+      "max": 600
+    },
+    {
+      "key": "allow_heater_on",
+      "type": "boolean",
+      "label": {
+        "en": "Allow switching the water heaters on",
+        "fr": "Autoriser la mise en marche des chauffe-eau"
+      },
+      "description": {
+        "en": "Off by default. Each switch-on carries the device timer below: the water heater stops by itself at its end. Switching off never depends on this option.",
+        "fr": "Désactivé par défaut. Chaque mise en marche porte la minuterie ci-dessous : le chauffe-eau s'arrête de lui-même à la fin. L'arrêt ne dépend jamais de cette option."
+      },
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "heater_minutes",
+      "type": "number",
+      "label": {
+        "en": "Water heater run (minutes)",
+        "fr": "Durée de marche du chauffe-eau (minutes)"
+      },
+      "description": {
+        "en": "Length of every switch-on of a water heater from Gladys, 1 to 150 minutes.",
+        "fr": "Durée de chaque mise en marche d'un chauffe-eau depuis Gladys, de 1 à 150 minutes."
+      },
+      "required": false,
+      "default": 60,
+      "min": 1,
+      "max": 150
+    },
+    {
+      "key": "allow_plug_on",
+      "type": "boolean",
+      "label": {
+        "en": "Allow switching the plugs on",
+        "fr": "Autoriser la mise en marche des prises"
+      },
+      "description": {
+        "en": "Off by default. Switching off never depends on this option.",
+        "fr": "Désactivé par défaut. L'arrêt ne dépend jamais de cette option."
+      },
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "allow_shutter_moves",
+      "type": "boolean",
+      "label": {
+        "en": "Allow moving the shutters",
+        "fr": "Autoriser le déplacement des volets"
+      },
+      "description": {
+        "en": "Off by default: open, close and position. Stopping a shutter never depends on this option.",
+        "fr": "Désactivé par défaut : ouvrir, fermer et positionner. L'arrêt d'un volet ne dépend jamais de cette option."
+      },
+      "required": false,
+      "default": false
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
+      "key": "test_connection",
+      "label": {
+        "en": "Search the devices",
+        "fr": "Chercher les appareils"
+      },
       "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
-    }
-  ],
-  "scene_triggers": [
-    {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
-      "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
-      },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
-        },
-        {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
-          "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
-          ]
-        }
-      ],
-      "variables": [
-        {
-          "key": "target",
-          "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
-        }
-      ]
-    }
-  ],
-  "scene_actions": [
-    {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
-      },
-      "timeout_seconds": 15,
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ],
-      "outputs": [
-        {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
-        }
-      ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
     }
   ]
 }

@@ -1,0 +1,242 @@
+[
+  {
+    "name": "option: heater on not checked on arrival",
+    "file": "src/app.js",
+    "from": "    if (!this.optionFor(action)) {\n      return action",
+    "to": "    if (false) {\n      return action"
+  },
+  {
+    "name": "option: not checked again before the write",
+    "file": "src/app.js",
+    "from": "            if (!this.optionFor(action)) throw new Refusal(ERRORS.notSent);",
+    "to": ""
+  },
+  {
+    "name": "identity: not required for commands",
+    "file": "src/app.js",
+    "from": "    if (!this.identityFresh(mac, mono)) return ERRORS.identity;",
+    "to": ""
+  },
+  {
+    "name": "identity: not checked again before the write",
+    "file": "src/app.js",
+    "from": "            if (!this.identityFresh(mac, mono) || mono >= deadline) {",
+    "to": "            if (mono >= deadline) {"
+  },
+  {
+    "name": "/data: commands allowed while unwritable",
+    "file": "src/app.js",
+    "from": "    if (this.memoryState !== 'ok' || !this.dataWritable) return ERRORS.dataUnwritable;",
+    "to": ""
+  },
+  {
+    "name": "stop in flight: commands not refused",
+    "file": "src/app.js",
+    "from": "    if (this.runtime(mac).stopInFlight) return ERRORS.stopping;",
+    "to": ""
+  },
+  {
+    "name": "a switch-on that left does not lift the stop",
+    "file": "src/app.js",
+    "from": "            if (this.stops.delete(mac)) this.saveLater();",
+    "to": ""
+  },
+  {
+    "name": "a stop does not cancel the commands waiting",
+    "file": "src/app.js",
+    "from": "    // Nothing clicked before the stop leaves after it.\n    for (const entry of rt.commands) entry.cancelled = true;",
+    "to": ""
+  },
+  {
+    "name": "a stop does not cut the session in progress",
+    "file": "src/app.js",
+    "from": "    if (rt.holder && rt.holder.kind !== 'stop') rt.holder.abort();",
+    "to": ""
+  },
+  {
+    "name": "a stop resent by any read (its own answer, older reads)",
+    "file": "src/app.js",
+    "from": "    if (stop.sentMono === undefined || started <= stop.sentMono) return;",
+    "to": "    if (stop.sentMono === undefined) return;"
+  },
+  {
+    "name": "a stop resent without limit",
+    "file": "src/app.js",
+    "from": "    if (stop.sends < LIMITS.stopSends && stop.lastResendRead !== started) {",
+    "to": "    if (stop.lastResendRead !== started) {"
+  },
+  {
+    "name": "a shutter stop kept beyond the travel",
+    "file": "src/app.js",
+    "from": "      if (stop.kind === 'shutter' && this.monotonic() - stop.clickMono > TIMINGS.shutterStopFor) {",
+    "to": "      if (false) {"
+  },
+  {
+    "name": "shutter stops kept in /data",
+    "file": "src/app.js",
+    "from": "      stops: [...this.stops.values()].filter((s) => s.kind === 'off'),",
+    "to": "      stops: [...this.stops.values()],"
+  },
+  {
+    "name": "/data merged over a click made meanwhile",
+    "file": "src/app.js",
+    "from": "      if (!this.stops.has(stop.mac)) {",
+    "to": "      if (true) {"
+  },
+  {
+    "name": "/data written while unread",
+    "file": "src/app.js",
+    "from": "    if (this.memoryState !== 'ok') return false;",
+    "to": ""
+  },
+  {
+    "name": "/data read twice at a time",
+    "file": "src/app.js",
+    "from": "    if (!this.loading) {",
+    "to": "    if (true) {"
+  },
+  {
+    "name": "run judged on a read started before the switch-on",
+    "file": "src/app.js",
+    "from": "    if (run.sentMono === undefined || started <= run.sentMono) return;",
+    "to": ""
+  },
+  {
+    "name": "run restarted elsewhere still stopped",
+    "file": "src/app.js",
+    "from": "    if (Number.isFinite(state.timeOn) && state.timeOn * 1000 < elapsed - 90_000) {",
+    "to": "    if (false) {"
+  },
+  {
+    "name": "run never ended by the module",
+    "file": "src/app.js",
+    "from": "    if (elapsed > run.minutes * MINUTE + TIMINGS.heaterGrace) {",
+    "to": "    if (elapsed > run.minutes * MINUTE * 1000) {"
+  },
+  {
+    "name": "run not required in /data before the switch-on",
+    "file": "src/app.js",
+    "from": "        if (!(await this.saveBounded())) throw new Refusal(ERRORS.dataUnwritable);",
+    "to": "        await this.saveBounded();"
+  },
+  {
+    "name": "an older read published over a newer one",
+    "file": "src/app.js",
+    "from": "    if (started < rt.appliedStart) return;",
+    "to": ""
+  },
+  {
+    "name": "reads without a confirmed identity",
+    "file": "src/app.js",
+    "from": "!this.identityReadable(mac, mono) ||",
+    "to": ""
+  },
+  {
+    "name": "reads of devices not created",
+    "file": "src/app.js",
+    "from": "    if (!created || !this",
+    "to": "    if (!this"
+  },
+  {
+    "name": "two devices on one address trusted",
+    "file": "src/app.js",
+    "from": "      if (!SUPPORTED_KINDS.includes(d.kind) || byIp.get(d.ip) !== 1) continue;",
+    "to": "      if (!SUPPORTED_KINDS.includes(d.kind)) continue;"
+  },
+  {
+    "name": "Breeze toggle remote played",
+    "file": "src/app.js",
+    "from": "        if (kind === 'breeze' && !breezeOffCode(known.remote)) {",
+    "to": "        if (false) {"
+  },
+  {
+    "name": "same state right after the write confirms",
+    "file": "src/app.js",
+    "from": "    if (expect.check(state) && !(quick && expect.value(state) === expect.before)) {",
+    "to": "    if (expect.check(state)) {"
+  },
+  {
+    "name": "reads sooner than the interval",
+    "file": "src/app.js",
+    "from": "          : Math.max(0, rt.lastReadStart + interval - this.monotonic()),",
+    "to": "          : Math.max(0, rt.lastReadStart + interval / 2 - this.monotonic()),"
+  },
+  {
+    "name": "a new interval reads sooner",
+    "file": "src/app.js",
+    "from": "        wait = Math.max(0, rt.lastReadStart + interval - mono);",
+    "to": "        wait = Math.max(0, rt.lastReadStart + interval / 2 - mono);"
+  },
+  {
+    "name": "restart reads at once",
+    "file": "src/app.js",
+    "from": "        wait = Math.max(0, Math.min(interval, this.attemptAt + interval - this.now()));",
+    "to": "        wait = 0;"
+  },
+  {
+    "name": "no backoff after failures",
+    "file": "src/app.js",
+    "from": "          ? Math.max(interval, backoff)",
+    "to": "          ? interval"
+  },
+  {
+    "name": "announcement from another source accepted",
+    "file": "src/protocol/parse.js",
+    "from": "  if (!unicastIPv4(ip, options) || ip !== sourceIp) return { error: 'address' };",
+    "to": "  if (!unicastIPv4(ip, options)) return { error: 'address' };"
+  },
+  {
+    "name": "CRC not checked",
+    "file": "src/protocol/frame.js",
+    "from": "  if (bytes.readUInt16LE(bytes.length - 4) !== crc) {",
+    "to": "  if (false) {"
+  },
+  {
+    "name": "extra bytes after an answer accepted",
+    "file": "src/protocol/session.js",
+    "from": "      if (this.buffer.length > length) {",
+    "to": "      if (false) {"
+  },
+  {
+    "name": "bytes nobody asked for kept",
+    "file": "src/protocol/session.js",
+    "from": "    if (!this.waiter) {\n      // Nothing asked",
+    "to": "    if (false) {\n      // Nothing asked"
+  },
+  {
+    "name": "run length beyond the configured bound",
+    "file": "src/protocol/packets.js",
+    "from": "minutes > maxMinutes || maxMinutes > 150",
+    "to": "maxMinutes > 150"
+  },
+  {
+    "name": "run length beyond 150 minutes",
+    "file": "src/protocol/packets.js",
+    "from": "minutes > maxMinutes || maxMinutes > 150",
+    "to": "minutes > maxMinutes"
+  },
+  {
+    "name": "any truthy value ticks an option",
+    "file": "src/config.js",
+    "from": "const flag = (value) => value === true || value === 'true';",
+    "to": "const flag = (value) => Boolean(value);"
+  },
+  {
+    "name": "a command does not cut a read",
+    "file": "src/app.js",
+    "from": "        if (rt.holder?.kind === 'read') rt.holder.abort();",
+    "to": ""
+  },
+  {
+    "name": "kept stops resent at start beyond their 3 writes",
+    "file": "src/app.js",
+    "from": "      if (!stop.sent || stop.sends < LIMITS.stopSends) this.kickStop(stop.mac);",
+    "to": "      this.kickStop(stop.mac);"
+  },
+  {
+    "name": "kept stops not resent at start when sent but not confirmed",
+    "file": "src/app.js",
+    "from": "      if (!stop.sent || stop.sends < LIMITS.stopSends) this.kickStop(stop.mac);",
+    "to": "      if (!stop.sent) this.kickStop(stop.mac);"
+  }
+]
